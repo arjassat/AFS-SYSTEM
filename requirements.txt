@@ -2,3 +2,4 @@ streamlit
 pdfplumber
 google-genai
 reportlab
+matplotlib
