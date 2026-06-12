@@ -3,11 +3,11 @@ import pdfplumber
 from google import genai
 import io
 
-# ReportLab Layout & Presentation Tools
+# Advanced ReportLab Layout, Grid, and Typographic tools
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from reportlab.lib.colors import HexColor
 
 # 1. Page Configuration
@@ -23,11 +23,11 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# 3. Premium Document Generation Engine (Typography & Matrix Tables)
+# 3. Master Styling Engine for Premium Corporate Dossiers
 def create_pdf_report(report_text):
     buffer = io.BytesIO()
     
-    # Standard Letter margins for pristine presentation
+    # 0.75-inch margins for an elegant corporate page balance
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=letter,
@@ -37,10 +37,10 @@ def create_pdf_report(report_text):
     
     styles = getSampleStyleSheet()
     
-    # Premium Executive Branding Theme (Midnight Corporate & Warm Charcoal)
+    # Executive Typographic Scales
     title_style = ParagraphStyle(
         'DocTitle', parent=styles['Heading1'],
-        fontName='Helvetica-Bold', fontSize=24, leading=28,
+        fontName='Helvetica-Bold', fontSize=22, leading=26,
         textColor=HexColor('#0F1E2C'), spaceAfter=4
     )
     
@@ -50,11 +50,10 @@ def create_pdf_report(report_text):
         textColor=HexColor('#64748B'), spaceAfter=15
     )
     
-    heading_style = ParagraphStyle(
-        'SectionHeader', parent=styles['Heading2'],
-        fontName='Helvetica-Bold', fontSize=13, leading=17,
-        textColor=HexColor('#1E293B'), spaceBefore=16, spaceAfter=10,
-        keepWithNext=True
+    # Premium Background Section Header Styles
+    section_title_style = ParagraphStyle(
+        'SecTitle', fontName='Helvetica-Bold', fontSize=11, leading=14,
+        textColor=HexColor('#FFFFFF')
     )
     
     body_style = ParagraphStyle(
@@ -63,82 +62,91 @@ def create_pdf_report(report_text):
         textColor=HexColor('#334155'), spaceAfter=8, alignment=TA_LEFT
     )
     
-    # KPI Matrix Styles
-    kpi_label = ParagraphStyle('KPILabel', fontName='Helvetica-Bold', fontSize=10, leading=12, textColor=HexColor('#475569'))
-    kpi_value = ParagraphStyle('KPIValue', fontName='Helvetica-Bold', fontSize=11, leading=13, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
+    # Grid Table Label & Value Styles
+    table_label = ParagraphStyle('TLabel', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=HexColor('#1E293B'))
+    table_value = ParagraphStyle('TValue', fontName='Helvetica-Bold', fontSize=10.5, leading=13, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
 
     story = []
     
-    # Corporate Header Accent
+    # Letterhead Branding Accent
     story.append(Paragraph("STRATEGIC FINANCIAL PERFORMANCE BRIEF", title_style))
     story.append(Paragraph("Exclusively Prepared for Executive Management | Operational Portfolio Analysis", subtitle_style))
-    story.append(HRFlowable(width="100%", thickness=2.5, color=HexColor('#0F1E2C'), spaceAfter=20))
+    story.append(Spacer(1, 10))
     
-    # Parse incoming structured copy and build executive layout sections dynamically
     lines = report_text.split('\n')
-    
-    in_kpi_block = False
-    kpi_data = []
+    grid_data = []
     
     for line in lines:
         clean_line = line.strip()
         if not clean_line:
             continue
             
-        # Format Major Pillars
+        # 1. Match Major Section Headers
         if clean_line.startswith(('1.', '2.', '3.', '4.', '###', '##')):
-            # Flush out pending KPI tables if moving to a new section
-            if kpi_data:
-                t = Table(kpi_data, colWidths=[280, 200])
+            # Flush out any pending grid tables before creating a new header
+            if grid_data:
+                t = Table(grid_data, colWidths=[320, 184])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')),
-                    ('PADDING', (0,0), (-1,-1), 10),
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 12),
-                    ('TOPPADDING', (0,0), (-1,-1), 12),
+                    ('PADDING', (0,0), (-1,-1), 8),
+                    ('ALIGN', (1,0), (1,-1), 'RIGHT'),
                     ('LINEBELOW', (0,0), (-1,-1), 0.5, HexColor('#E2E8F0')),
                 ]))
                 story.append(t)
                 story.append(Spacer(1, 12))
-                kpi_data = []
-                in_kpi_block = False
+                grid_data = []
                 
             header_text = clean_line.replace('#', '').strip().upper()
-            story.append(Spacer(1, 6))
-            story.append(Paragraph(header_text, heading_style))
-            story.append(HRFlowable(width="100%", thickness=0.75, color=HexColor('#CBD5E1'), spaceAfter=8))
             
-        # Beautiful Key-Value Grid Parsing
-        elif ":" in clean_line and (clean_line.startswith('-') or clean_line[0].isdigit() or "R" in clean_line):
-            in_kpi_block = True
+            # Premium Full-Width Colored Section Bar instead of a plain text row
+            header_table = Table([[Paragraph(header_text, section_title_style)]], colWidths=[504])
+            header_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), HexColor('#0F1E2C')),
+                ('PADDING', (0,0), (-1,-1), 6),
+                ('TOPPADDING', (0,0), (-1,-1), 8),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+            ]))
+            story.append(Spacer(1, 10))
+            story.append(header_table)
+            story.append(Spacer(1, 10))
+            
+        # 2. Match Key Financial Indicators (Extract labels and values securely)
+        elif ":" in clean_line and (clean_line.startswith('-') or clean_line[0].isdigit() or "R" in clean_line or "Margin" in clean_line):
             parts = clean_line.split(":", 1)
             label_txt = parts[0].replace('-', '').replace('*', '').strip()
             val_txt = parts[1].replace('*', '').strip()
             
-            kpi_data.append([
-                Paragraph(label_txt, kpi_label),
-                Paragraph(val_txt, kpi_value)
+            grid_data.append([
+                Paragraph(label_txt, table_label),
+                Paragraph(val_txt, table_value)
             ])
+            
+        # 3. Match Paragraph Commentary Text
         else:
-            # Render standard executive copy paragraphs
-            if kpi_data:
-                t = Table(kpi_data, colWidths=[280, 200])
+            # Flush pending table metrics before rendering paragraphs
+            if grid_data:
+                t = Table(grid_data, colWidths=[320, 184])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')),
                     ('PADDING', (0,0), (-1,-1), 8),
+                    ('ALIGN', (1,0), (1,-1), 'RIGHT'),
                     ('LINEBELOW', (0,0), (-1,-1), 0.5, HexColor('#E2E8F0')),
                 ]))
                 story.append(t)
                 story.append(Spacer(1, 12))
-                kpi_data = []
-                in_kpi_block = False
+                grid_data = []
                 
             clean_line = clean_line.replace('**', '').replace('*', '').replace('___', '').replace('---', '')
             story.append(Paragraph(clean_line, body_style))
             
     # Trailing content cleanup check
-    if kpi_data:
-        t = Table(kpi_data, colWidths=[280, 200])
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')), ('PADDING', (0,0), (-1,-1), 8)]))
+    if grid_data:
+        t = Table(grid_data, colWidths=[320, 184])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')), 
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, HexColor('#E2E8F0'))
+        ]))
         story.append(t)
             
     doc.build(story)
@@ -176,7 +184,7 @@ if uploaded_files:
     Generate an elite executive performance brief customized perfectly for direct delivery to our primary client.
     
     CRITICAL STRUCTURE & PRESENTATION RULES:
-    - Never draw, mention, mock up, or suggest charts, bars, graphs, or visual plotting markers. The client demands a sleek, clean, text-and-grid layout.
+    - Never mention, draw, or attempt charts, bars, graphs, or visual markers. The layout must be perfectly text and matrix grid-based.
     - Absolutely NEVER include any section, title, or reference to "Recommendations", "Growth Strategy", or "Strategic Growth Recommendations". Present an unyielding snapshot analysis of operational facts only.
     - Keep every segment short, razor-sharp, polished, and immediately understandable. 
     - The financial summaries must read as fully intentional and foolproof. Do NOT reference missing inventory, undisclosed trade payables, or any financial statement compilation omissions. Frame everything as a calculated, robust capital environment.
@@ -188,7 +196,7 @@ if uploaded_files:
        - Render a clean, raw list of key comparative indicators using the EXACT following metric labels:
          Turnover Revenue Volume: [Insert Number]
          Gross Portfolio Margin: [Insert Number]
-         Bottom-line Corporate Earnings: [Insert Number]
+         Bottomline Corporate Earnings: [Insert Number]
          Unencumbered Liquid Cash Pools: [Insert Number]
     
     2. OVERHEAD STRATIFICATION & MARGIN OPTIMIZATION
@@ -212,13 +220,13 @@ if uploaded_files:
                 st.markdown(report_text)
                 st.write("---")
                 
-                # Render the high-value PDF with embedded table callout styling
+                # Render the premium PDF with embedded table callout styling
                 pdf_bytes = create_pdf_report(report_text)
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.download_button(
-                        label="📥 Download High-Value Client PDF Report",
+                        label="📥 Download Premium Client PDF Report",
                         data=pdf_bytes,
                         file_name="Premium_Financial_Analysis.pdf",
                         mime="application/pdf"
