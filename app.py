@@ -2,7 +2,12 @@ import streamlit as st
 import pdfplumber
 from google import genai
 import io
-from fpdf import FPDF
+
+# Import ReportLab tools for reliable, safe layout handling
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT
 
 # 1. Page Configuration
 st.set_page_config(page_title="Firm Financial Reporter", layout="wide")
@@ -17,40 +22,77 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# 3. Helper Function to Convert Text into a Clean, Formatted PDF
+# 3. Robust Helper Function to Convert Text into a Clean ReportLab PDF
 def create_pdf_report(report_text):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
+    buffer = io.BytesIO()
     
-    # Simple, professional styling
-    pdf.set_font("Helvetica", size=11)
+    # Setup document geometry securely
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter,
+        rightMargin=54, leftMargin=54, # 0.75 inch clean standard margins
+        topMargin=54, bottomMargin=54
+    )
     
-    # Split raw text into individual lines to render cleanly
+    styles = getSampleStyleSheet()
+    
+    # Build corporate styles
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        spaceAfter=15
+    )
+    
+    heading_style = ParagraphStyle(
+        'SectionHeader',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        leading=16,
+        spaceBefore=12,
+        spaceAfter=6,
+        keepWithNext=True # Prevents headers floating at the bottom of a page
+    )
+    
+    body_style = ParagraphStyle(
+        'ReportBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        spaceAfter=6,
+        alignment=TA_LEFT
+    )
+
+    story = []
+    
+    # Document Header
+    story.append(Paragraph("FINANCIAL ANALYSIS REPORT", title_style))
+    story.append(Spacer(1, 10))
+    
+    # Process text line by line to keep formatting highly professional
     lines = report_text.split('\n')
-    
     for line in lines:
-        # If it looks like a major header (e.g., "1. EXECUTIVE SUMMARY")
-        if line.strip().startswith(('1.', '2.', '3.', '4.', '###', '##')):
-            pdf.ln(5)  # Add extra space before header
-            pdf.set_font("Helvetica", style="B", size=13)
-            # Remove markdown syntax if present
-            clean_header = line.replace('#', '').strip()
-            pdf.cell(0, 8, txt=clean_header, ln=True)
-            pdf.set_font("Helvetica", size=11) # Reset font style
-            pdf.ln(2)
-        # If it's a list point or table separator line, keep formatting basic
-        elif line.strip().startswith('-') or line.strip().startswith('|'):
-            pdf.set_font("Courier", size=10)  # Use fixed-width font for clean data alignment
-            pdf.cell(0, 5, txt=line, ln=True)
-            pdf.set_font("Helvetica", size=11)
-        else:
-            # Handle standard paragraph text line wrapping gracefully
-            pdf.multi_cell(0, 6, txt=line)
+        clean_line = line.strip()
+        if not clean_line:
+            continue
             
-    # Output the PDF data straight into an in-memory byte buffer
-    pdf_output = pdf.output()
-    return bytes(pdf_output)
+        # Strip away standard markdown headers and style them natively
+        if clean_line.startswith(('1.', '2.', '3.', '4.', '###', '##')):
+            header_text = clean_line.replace('#', '').strip()
+            story.append(Paragraph(header_text, heading_style))
+        else:
+            # Clean up common raw markdown formatting indicators safely
+            clean_line = clean_line.replace('**', '').replace('*', '').replace('___', '').replace('---', '')
+            story.append(Paragraph(clean_line, body_style))
+            
+    # Build PDF layout in memory safely
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # 4. File Uploader Interface
 uploaded_files = st.file_uploader(
@@ -97,7 +139,7 @@ if uploaded_files:
     4. STRATEGIC RECOMMENDATIONS
        - Provide 3-4 professional, actionable business recommendations based on the numbers.
     
-    Tone: Highly professional, objective, and advisory. Avoid markdown tables using complex symbols; use standard text lines or lists so it draws clearly on a PDF document page.
+    Tone: Highly professional, objective, and advisory. Avoid building ASCII/Markdown tables with complex vertical bar symbols; output data points in clean text rows or structured itemized lists.
     """
 
     if st.button("🚀 Generate Client Report"):
@@ -114,10 +156,10 @@ if uploaded_files:
                 st.markdown(report_text)
                 st.write("---")
                 
-                # Generate PDF download in real-time
+                # Generate ReportLab PDF in real-time without layout or horizontal bugs
                 pdf_bytes = create_pdf_report(report_text)
                 
-                # Split layout into two parallel download buttons
+                # Split layout into two download options
                 col1, col2 = st.columns(2)
                 
                 with col1:
