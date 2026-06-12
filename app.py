@@ -2,24 +2,57 @@ import streamlit as st
 import pdfplumber
 from google import genai
 import io
+from fpdf import FPDF
 
 # 1. Page Configuration
 st.set_page_config(page_title="Firm Financial Reporter", layout="wide")
 st.title("📊 Client Financial Statement Analyzer")
-st.subheader("Upload Annual Financial Statements to generate a professional PDF analysis report.")
+st.subheader("Upload Annual Financial Statements to generate professional text and PDF analysis reports.")
 
-# 2. Get Secure API Key from Streamlit Environment
-# This keeps your free key totally hidden from the web
+# 2. Configure Environment Secrets
 api_key = st.secrets.get("GEMINI_API_KEY")
-
 if not api_key:
     st.error("Missing Gemini API Key. Please add it to your Streamlit secrets.")
     st.stop()
 
-# Initialize the Gemini Client
 client = genai.Client(api_key=api_key)
 
-# 3. File Uploader Interface
+# 3. Helper Function to Convert Text into a Clean, Formatted PDF
+def create_pdf_report(report_text):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    
+    # Simple, professional styling
+    pdf.set_font("Helvetica", size=11)
+    
+    # Split raw text into individual lines to render cleanly
+    lines = report_text.split('\n')
+    
+    for line in lines:
+        # If it looks like a major header (e.g., "1. EXECUTIVE SUMMARY")
+        if line.strip().startswith(('1.', '2.', '3.', '4.', '###', '##')):
+            pdf.ln(5)  # Add extra space before header
+            pdf.set_font("Helvetica", style="B", size=13)
+            # Remove markdown syntax if present
+            clean_header = line.replace('#', '').strip()
+            pdf.cell(0, 8, txt=clean_header, ln=True)
+            pdf.set_font("Helvetica", size=11) # Reset font style
+            pdf.ln(2)
+        # If it's a list point or table separator line, keep formatting basic
+        elif line.strip().startswith('-') or line.strip().startswith('|'):
+            pdf.set_font("Courier", size=10)  # Use fixed-width font for clean data alignment
+            pdf.cell(0, 5, txt=line, ln=True)
+            pdf.set_font("Helvetica", size=11)
+        else:
+            # Handle standard paragraph text line wrapping gracefully
+            pdf.multi_cell(0, 6, txt=line)
+            
+    # Output the PDF data straight into an in-memory byte buffer
+    pdf_output = pdf.output()
+    return bytes(pdf_output)
+
+# 4. File Uploader Interface
 uploaded_files = st.file_uploader(
     "Upload Financial PDFs (Select multiple to compare years)", 
     type=["pdf"], 
@@ -29,12 +62,9 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     st.info(f"Processing {len(uploaded_files)} document(s)...")
     
-    # Store extracted text from all uploaded files
     combined_raw_text = ""
-    
     for uploaded_file in uploaded_files:
         combined_raw_text += f"\n=== DOCUMENT: {uploaded_file.name} ===\n"
-        # Open PDF from memory without saving to a local disk
         with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
             for i, page in enumerate(pdf.pages):
                 page_text = page.extract_text()
@@ -43,7 +73,6 @@ if uploaded_files:
 
     st.success("PDF Data safely extracted into memory!")
 
-    # 4. Define the Expert Accounting Prompt
     analysis_prompt = f"""
     You are a senior professional chartered accountant and commercial financial auditor.
     Analyze the following extracted financial data from the client's financial statements:
@@ -55,47 +84,57 @@ if uploaded_files:
     
     1. EXECUTIVE SUMMARY & STANDING
        - Where is the business currently sitting? Give an immediate high-level health check.
-       - A summary table comparing Key Figures (Revenue, Gross Profit, Net Profit, Cash Balances) across the available financial years.
+       - A summary list comparing Key Figures (Revenue, Gross Profit, Net Profit, Cash Balances) across available years.
     
     2. PROFITABILITY ANALYSIS
-       - Detail the Gross Profit (GP) increase or decrease in both currency amounts and margin percentages.
-       - Comment on revenue growth/contraction trends.
-       - Analyze overhead expenditure efficiency (Are operational expenses rising faster than revenue?).
+       - Detail the Gross Profit (GP) increase or decrease in currency and margin percentages.
+       - Comment on revenue growth/contraction trends and overhead expenditure efficiency.
     
     3. LIQUIDITY & FINANCIAL STANDING
-       - Calculate and comment on the Current Ratio (Current Assets / Current Liabilities).
-       - Calculate and comment on the Acid-Test / Quick Ratio.
-       - Point out any red flags, such as cash trapped in trade debtors (receivables) while bank balances drop, or high reliance on drawings.
+       - Calculate and comment on the Current Ratio and Acid-Test / Quick Ratio.
+       - Point out any operational risks or cash-flow bottlenecks.
     
     4. STRATEGIC RECOMMENDATIONS
-       - Provide 3-4 professional, actionable business recommendations based on the data to optimize their cash positioning, protect margins, or manage liabilities next year.
+       - Provide 3-4 professional, actionable business recommendations based on the numbers.
     
-    Tone: Highly professional, objective, advisory, and polished. Do not use generic filler.
+    Tone: Highly professional, objective, and advisory. Avoid markdown tables using complex symbols; use standard text lines or lists so it draws clearly on a PDF document page.
     """
 
-    # 5. Run Free AI Generation
     if st.button("🚀 Generate Client Report"):
-        with st.spinner("Analyzing financials and calculating metrics..."):
+        with st.spinner("Analyzing financials and compiling metrics..."):
             try:
-                # Use the fast, powerful, and free-tier eligible flash model
                 response = client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=analysis_prompt
                 )
                 
-                # Render the resulting report on screen
-                st.markdown("### 📋 Deployed Financial Report Preview")
                 report_text = response.text
-                st.markdown(report_text)
                 
-                # 6. Enable Free Text Exporting 
-                # Allows you to easily copy-paste or download directly into Microsoft Word/Docs
-                st.download_button(
-                    label="📥 Download Report as Text (.txt File)",
-                    data=report_text,
-                    file_name="Financial_Analysis_Report.txt",
-                    mime="text/plain"
-                )
+                st.markdown("### 📋 Deployed Financial Report Preview")
+                st.markdown(report_text)
+                st.write("---")
+                
+                # Generate PDF download in real-time
+                pdf_bytes = create_pdf_report(report_text)
+                
+                # Split layout into two parallel download buttons
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.download_button(
+                        label="📥 Download Report as PDF (.pdf File)",
+                        data=pdf_bytes,
+                        file_name="Financial_Analysis_Report.pdf",
+                        mime="application/pdf"
+                    )
+                    
+                with col2:
+                    st.download_button(
+                        label="📥 Download Report as Text (.txt File)",
+                        data=report_text,
+                        file_name="Financial_Analysis_Report.txt",
+                        mime="text/plain"
+                    )
                 
             except Exception as e:
                 st.error(f"An error occurred during generation: {e}")
