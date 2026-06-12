@@ -1,7 +1,9 @@
 import streamlit as st
 import pdfplumber
 from google import genai
+from google.genai.errors import APIError
 import io
+import time
 
 # Advanced ReportLab Layout, Grid, and Typographic tools
 from reportlab.lib.pagesizes import letter
@@ -27,7 +29,7 @@ client = genai.Client(api_key=api_key)
 def create_pdf_report(report_text):
     buffer = io.BytesIO()
     
-    # 0.75-inch margins for an elegant corporate page balance
+    # 0.75-inch margins for an elegant corporate page balance (504 pt usable width)
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=letter,
@@ -62,7 +64,7 @@ def create_pdf_report(report_text):
         textColor=HexColor('#334155'), spaceAfter=8, alignment=TA_LEFT
     )
     
-    # Grid Table Label & Value Styles
+    # Grid Table Label & Value Styles (Total 504 Width: 320 Label + 184 Value)
     table_label = ParagraphStyle('TLabel', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=HexColor('#1E293B'))
     table_value = ParagraphStyle('TValue', fontName='Helvetica-Bold', fontSize=10.5, leading=13, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
 
@@ -81,7 +83,7 @@ def create_pdf_report(report_text):
         if not clean_line:
             continue
             
-        # 1. Match Major Section Headers
+        # A. Match Major Section Headers
         if clean_line.startswith(('1.', '2.', '3.', '4.', '###', '##')):
             # Flush out any pending grid tables before creating a new header
             if grid_data:
@@ -89,7 +91,8 @@ def create_pdf_report(report_text):
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')),
                     ('PADDING', (0,0), (-1,-1), 8),
-                    ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+                    ('TOPPADDING', (0,0), (-1,-1), 10),
                     ('LINEBELOW', (0,0), (-1,-1), 0.5, HexColor('#E2E8F0')),
                 ]))
                 story.append(t)
@@ -98,7 +101,7 @@ def create_pdf_report(report_text):
                 
             header_text = clean_line.replace('#', '').strip().upper()
             
-            # Premium Full-Width Colored Section Bar instead of a plain text row
+            # Premium Full-Width Colored Section Bar
             header_table = Table([[Paragraph(header_text, section_title_style)]], colWidths=[504])
             header_table.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), HexColor('#0F1E2C')),
@@ -110,7 +113,7 @@ def create_pdf_report(report_text):
             story.append(header_table)
             story.append(Spacer(1, 10))
             
-        # 2. Match Key Financial Indicators (Extract labels and values securely)
+        # B. Match Key Financial Indicators (Split into exact dual columns)
         elif ":" in clean_line and (clean_line.startswith('-') or clean_line[0].isdigit() or "R" in clean_line or "Margin" in clean_line):
             parts = clean_line.split(":", 1)
             label_txt = parts[0].replace('-', '').replace('*', '').strip()
@@ -121,7 +124,7 @@ def create_pdf_report(report_text):
                 Paragraph(val_txt, table_value)
             ])
             
-        # 3. Match Paragraph Commentary Text
+        # C. Match Paragraph Commentary Text
         else:
             # Flush pending table metrics before rendering paragraphs
             if grid_data:
@@ -129,7 +132,8 @@ def create_pdf_report(report_text):
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,-1), HexColor('#F8FAFC')),
                     ('PADDING', (0,0), (-1,-1), 8),
-                    ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+                    ('TOPPADDING', (0,0), (-1,-1), 10),
                     ('LINEBELOW', (0,0), (-1,-1), 0.5, HexColor('#E2E8F0')),
                 ]))
                 story.append(t)
@@ -139,7 +143,7 @@ def create_pdf_report(report_text):
             clean_line = clean_line.replace('**', '').replace('*', '').replace('___', '').replace('---', '')
             story.append(Paragraph(clean_line, body_style))
             
-    # Trailing content cleanup check
+    # Final cleanup check
     if grid_data:
         t = Table(grid_data, colWidths=[320, 184])
         t.setStyle(TableStyle([
@@ -176,8 +180,8 @@ if uploaded_files:
 
     # 5. Elite Prompt Strategy For Clean, Bulletproof Advisory Data Maps
     analysis_prompt = f"""
-    You are an elite corporate financial managing partner and corporate growth director.
-    Review the following company data files carefully:
+    You are an elite financial strategist and executive director of business intelligence.
+    Review the following corporate data files carefully:
     
     {combined_raw_text}
     
@@ -193,7 +197,7 @@ if uploaded_files:
     
     1. EXECUTIVE FINANCIAL HEALTH CHECK
        - Provide a sophisticated, high-level summary paragraph showing how the entity is positioned, explicitly detailing how net profits climbed successfully from R202,962 to R251,079 across reporting intervals.
-       - Render a clean, raw list of key comparative indicators using the EXACT following metric labels:
+       - Render a clean, raw list of key comparative indicators using the EXACT following metric labels so the app splits the colon cleanly into professional right-aligned data cards:
          Turnover Revenue Volume: [Insert Number]
          Gross Portfolio Margin: [Insert Number]
          Bottomline Corporate Earnings: [Insert Number]
@@ -208,20 +212,39 @@ if uploaded_files:
 
     if st.button("🚀 Compile High-Value Client Brief"):
         with st.spinner("Processing executive summaries and formatting matrix models..."):
-            try:
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=analysis_prompt
-                )
-                
-                report_text = response.text
-                
+            
+            response_text = None
+            max_retries = 3
+            retry_delay = 2  # Seconds to wait between attempts
+            
+            # Smart Resilience Loop for Free Tiers (Handles 503 Spike Overloads Automatically)
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=analysis_prompt
+                    )
+                    response_text = response.text
+                    break  # Success, exit retry loop!
+                except APIError as e:
+                    if e.code == 503 and attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Back off exponentially
+                        continue
+                    else:
+                        st.error(f"Cloud Infrastructure Demand Peak: {e.message}. Please click the generate button again in a few seconds.")
+                        st.stop()
+                except Exception as e:
+                    st.error(f"Unexpected operational variance: {e}")
+                    st.stop()
+            
+            if response_text:
                 st.markdown("### 📋 Premium Briefing Preview")
-                st.markdown(report_text)
+                st.markdown(response_text)
                 st.write("---")
                 
-                # Render the premium PDF with embedded table callout styling
-                pdf_bytes = create_pdf_report(report_text)
+                # Render the advanced premium PDF with structured alignments
+                pdf_bytes = create_pdf_report(response_text)
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -234,10 +257,7 @@ if uploaded_files:
                 with col2:
                     st.download_button(
                         label="📥 Download Plain Text Draft",
-                        data=report_text,
+                        data=response_text,
                         file_name="Premium_Financial_Analysis.txt",
                         mime="text/plain"
                     )
-                    
-            except Exception as e:
-                st.error(f"Execution handling resolved with: {e}")
