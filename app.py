@@ -93,10 +93,10 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     body_style = ParagraphStyle('ReportBody', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=15.5, textColor=HexColor('#334155'), spaceAfter=7)
     
     # Matrix Grid Style Nodes
-    th_lbl = ParagraphStyle('THLbl', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'))
-    th_v = ParagraphStyle('THVal', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'), alignment=TA_RIGHT)
-    t_lbl = ParagraphStyle('TLabel', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=HexColor('#1E293B'))
-    t_val = ParagraphStyle('TValue', fontName='Helvetica', fontSize=9, leading=12, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
+    th_lbl = ParagraphStyle('THLightLbl', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'))
+    th_v = ParagraphStyle('THLightVal', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'), alignment=TA_RIGHT)
+    t_lbl = ParagraphStyle('TLabelGrid', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=HexColor('#1E293B'))
+    t_val = ParagraphStyle('TValueGrid', fontName='Helvetica', fontSize=9, leading=12, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
 
     story = []
     
@@ -141,17 +141,17 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
             story.append(Spacer(1, 8))
             
         # Matrix Table Stream Parsing
-        elif "|" in clean_line and any(m in clean_line for m in ["R", "%", "Ratio", "Indicator", "Margin", "Volume"]):
+        elif "|" in clean_line and any(m in clean_line for m in ["R", "%", "Ratio", "Indicator", "Margin", "Volume", "Valuation"]):
             parts = clean_line.split("|")
             if len(parts) == 3:
                 lbl = parts[0].replace('-', '').replace('*', '').strip()
                 v1 = parts[1].replace('*', '').strip()
                 v2 = parts[2].replace('*', '').strip()
                 
-                if "Indicator" in lbl or "Cycle" in v1 or "FY" in v1:
+                if "Indicator" in lbl or "Metric" in lbl or "Cycle" in v1 or "FY" in v1 or "Valuation" in v1:
                     grid_data.append([Paragraph(lbl, th_lbl), Paragraph(v1, th_v), Paragraph(v2, th_v)])
                 else:
-                    grid_data.append([Paragraph(lbl, t_label), Paragraph(v1, t_val), Paragraph(v2, t_val)])
+                    grid_data.append([Paragraph(lbl, t_lbl), Paragraph(v1, t_val), Paragraph(v2, t_val)])
                     
         # Commentary Paragraph Parsing
         else:
@@ -262,8 +262,8 @@ if uploaded_files:
         with st.spinner("Compiling database frameworks and drafting financial visuals..."):
             
             response_text = None
-            max_retries = 3
-            retry_delay = 2
+            max_retries = 5  # Expanded from 3 to 5 for elite resilience
+            retry_delay = 3  # Increased initial pause to let server clear
             
             for attempt in range(max_retries):
                 try:
@@ -272,15 +272,20 @@ if uploaded_files:
                         contents=analysis_prompt
                     )
                     response_text = response.text
-                    break
+                    break  # Success! Break out of the loop immediately.
                 except APIError as e:
-                    if e.code == 503 and attempt < max_retries - 1:
+                    # Catch both temporary 503 (busy) and 429 (rate limited) spikes
+                    if e.code in [429, 503] and attempt < max_retries - 1:
+                        st.warning(f"Cloud traffic spike detected (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
                         time.sleep(retry_delay)
-                        retry_delay *= 2
+                        retry_delay *= 2  # Aggressive exponential backoff
                         continue
                     else:
-                        st.error(f"Cloud server experiencing peak demand volume. Retrying...")
+                        st.error(f"Cloud Infrastructure Peak: Server is exceptionally busy. Code {e.code} - {e.message}")
                         st.stop()
+                except Exception as e:
+                    st.error(f"Unexpected operational variance: {e}")
+                    st.stop()
             
             if response_text:
                 # Generate custom high-value dashboard metrics images
