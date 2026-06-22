@@ -310,15 +310,16 @@ if uploaded_files:
     # Check if we already computed this exact report inside the cache
     if st.session_state.analysis_cache is not None:
         response_text = st.session_state.analysis_cache
-        st.info("⚡ pulled compiled dashboard assets from local session cache memory.")
+        st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
     else:
         response_text = None
 
-    if st.session_state.analysis_cache is自动 generated_or_clicked := st.button("🚀 Execute Ultimate Executive Analysis") or response_text:
+    # Line 317 Fixed Syntax Hook
+    if st.button("🚀 Execute Ultimate Executive Analysis") or response_text is not None:
         if not response_text:
             with st.spinner("Compiling database frameworks and drafting financial visuals..."):
                 max_retries = 5  
-                retry_delay = 5  # Expanded delay to let quota buckets clear cleanly
+                retry_delay = 5  
                 
                 for attempt in range(max_retries):
                     try:
@@ -327,7 +328,7 @@ if uploaded_files:
                             contents=analysis_prompt
                         )
                         response_text = response.text
-                        st.session_state.analysis_cache = response_text # Store into memory cache
+                        st.session_state.analysis_cache = response_text 
                         break  
                     except APIError as e:
                         if e.code in [429, 503] and attempt < max_retries - 1:
