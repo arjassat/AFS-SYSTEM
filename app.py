@@ -45,7 +45,6 @@ def extract_company_name(text):
     return "EXECUTIVE MANAGEMENT ENTITY"
 
 # RATE LIMIT FILTER: Semantic Distillation Engine
-# Strips down boilerplate sentences to lower context tokens by over 60%
 def distill_financial_text(text):
     distilled_lines = []
     ignore_keywords = ["accounting policies", "basis of preparation", "historical cost", "depreciation", "significant accounting"]
@@ -60,7 +59,7 @@ def distill_financial_text(text):
         
     return "\n".join(distilled_lines)
 
-# 4. Premium Data Graphics Engine
+# 4. Premium Data Graphics Engine (Enhanced Readability Palette)
 def generate_analysis_dashboard():
     categories = ['Turnover\n(LHS)', 'Gross Margin\n(LHS)', 'Operating Exp\n(LHS)', 'Net Income\n(RHS)']
     
@@ -103,14 +102,34 @@ def generate_analysis_dashboard():
     ax1.spines['top'].set_visible(False)
     ax1_right.spines['top'].set_visible(False)
     
-    # Plot 2: Proportional Capital Allocation Structure
+    # Plot 2: Proportional Capital Allocation Structure (High Contrast Light Corporate Colors)
     ax2 = fig.add_subplot(122)
     pie_labels = ['Direct Cost of Sales', 'Optimized Overheads', 'Retained Earnings Margin']
     pie_slices = [23354335, 983479, 251079] 
-    colors = ['#0F1E2C', '#334155', '#2563EB']
     
-    ax2.pie(pie_slices, labels=pie_labels, colors=colors, autopct='%1.1f%%', 
-            startangle=140, textprops={'fontsize': 8, 'color': '#0F1E2C'}, wedgeprops={'edgecolor': 'w', 'linewidth': 1})
+    # Premium corporate blues with gradient separation for crisp viewing
+    colors = ['#1E3A8A', '#3B82F6', '#93C5FD']
+    
+    wedges, texts, autotexts = ax2.pie(
+        pie_slices, 
+        labels=pie_labels, 
+        colors=colors, 
+        autopct='%1.1f%%', 
+        startangle=140, 
+        pctdistance=0.7,
+        wedgeprops={'edgecolor': 'w', 'linewidth': 1.5}
+    )
+    
+    # Force interior text white and crisp for maximum legibility against the blue slices
+    for text in texts:
+        text.set_color('#1E293B')
+        text.set_fontsize(8.5)
+        text.set_weight('bold')
+    for autotext in autotexts:
+        autotext.set_color('white')
+        autotext.set_fontsize(8.5)
+        autotext.set_weight('bold')
+        
     ax2.set_title('FY2023 Operational Capital Footprint', fontsize=10, fontweight='bold', color='#0F1E2C')
     
     plt.tight_layout()
@@ -129,7 +148,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     
     styles = getSampleStyleSheet()
     
-    # Typography Mapping
     title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=HexColor('#0F1E2C'), spaceAfter=2)
     subtitle_style = ParagraphStyle('DocSubtitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=HexColor('#2563EB'), spaceAfter=14)
     section_title_style = ParagraphStyle('SecTitle', fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=HexColor('#FFFFFF'))
@@ -237,10 +255,8 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    # Build a simple unique tracking hash from names and lengths
     combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
     
-    # Reset cache if a completely brand-new file selection is dropped in
     if st.session_state.current_file_hash != combined_hash:
         st.session_state.analysis_cache = None
         st.session_state.current_file_hash = combined_hash
@@ -307,14 +323,12 @@ if uploaded_files:
        - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
     """
 
-    # Check if we already computed this exact report inside the cache
     if st.session_state.analysis_cache is not None:
         response_text = st.session_state.analysis_cache
         st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
     else:
         response_text = None
 
-    # Line 317 Fixed Syntax Hook
     if st.button("🚀 Execute Ultimate Executive Analysis") or response_text is not None:
         if not response_text:
             with st.spinner("Compiling database frameworks and drafting financial visuals..."):
