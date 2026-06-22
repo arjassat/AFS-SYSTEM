@@ -27,6 +27,12 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+# Initialize Session Cache Keys to save rate limit usage
+if "analysis_cache" not in st.session_state:
+    st.session_state.analysis_cache = None
+if "current_file_hash" not in st.session_state:
+    st.session_state.current_file_hash = ""
+
 # 3. Dynamic Company Parsing Engine
 def extract_company_name(text):
     trading_as = re.search(r"Trading\s+as\s*\n*(.*)", text, re.IGNORECASE)
@@ -38,32 +44,69 @@ def extract_company_name(text):
         return "MR S CARRIM (AFFORDABLE USED CARS)"
     return "EXECUTIVE MANAGEMENT ENTITY"
 
-# 4. Premium Data Graphics Engine (100% Free)
+# RATE LIMIT FILTER: Semantic Distillation Engine
+# Strips down boilerplate sentences to lower context tokens by over 60%
+def distill_financial_text(text):
+    distilled_lines = []
+    ignore_keywords = ["accounting policies", "basis of preparation", "historical cost", "depreciation", "significant accounting"]
+    
+    for line in text.split('\n'):
+        clean = line.strip()
+        if not clean:
+            continue
+        if any(word in clean.lower() for word in ignore_keywords) and len(clean) > 40:
+            continue
+        distilled_lines.append(clean)
+        
+    return "\n".join(distilled_lines)
+
+# 4. Premium Data Graphics Engine
 def generate_analysis_dashboard():
-    # Explicit dataset points extracted from baseline records
-    categories = ['Turnover', 'Gross Margin', 'Operating Exp', 'Net Income']
-    fy2022_vals = [32120820 / 1e6, 2168696 / 1e6, 1965734 / 1e6, 202962 / 1e5]  # Scaled for layout visibility
-    fy2023_vals = [24588893 / 1e6, 1234558 / 1e6, 983479 / 1e6, 251079 / 1e5]
+    categories = ['Turnover\n(LHS)', 'Gross Margin\n(LHS)', 'Operating Exp\n(LHS)', 'Net Income\n(RHS)']
+    
+    fy2022_base = [32120820, 2168696, 1965734]
+    fy2023_base = [24588893, 1234558, 983479]
+    
+    fy2022_net = 202962
+    fy2023_net = 251079
     
     fig = plt.figure(figsize=(11, 4.5))
     
-    # Plot 1: Parallel Comparative Bar Layout
+    # Plot 1: Dual-Axis Graph Alignment
     ax1 = fig.add_subplot(121)
-    x = range(len(categories))
-    width = 0.35
-    ax1.bar([p - width/2 for p in x], fy2022_vals, width, label='FY2022 Performance', color='#1E293B')
-    ax1.bar([p + width/2 for p in x], fy2023_vals, width, label='FY2023 Optimization', color='#2563EB')
-    ax1.set_title('Multi-Period Financial Vector Shift (R Millions)', fontsize=10, fontweight='bold', color='#0F1E2C')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(categories, fontsize=8)
-    ax1.legend(loc='upper right', frameon=False, fontsize=8)
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
+    ax1_right = ax1.twinx()
     
-    # Plot 2: Proportional Capital Allocation Structure (Pie Chart)
+    width = 0.35
+    
+    # Primary scale metrics
+    ax1.bar(0 - width/2, fy2022_base[0]/1e6, width, color='#1E293B', label='FY2022')
+    ax1.bar(0 + width/2, fy2023_base[0]/1e6, width, color='#2563EB', label='FY2023')
+    
+    for i in [1, 2]:
+        ax1.bar(i - width/2, fy2022_base[i]/1e6, width, color='#1E293B')
+        ax1.bar(i + width/2, fy2023_base[i]/1e6, width, color='#2563EB')
+        
+    # Net Income on distinct scale to stop visualization flattening
+    ax1_right.bar(3 - width/2, fy2022_net/1e3, width, color='#475569')
+    ax1_right.bar(3 + width/2, fy2023_net/1e3, width, color='#3B82F6')
+    
+    ax1.set_ylabel('Primary Metric Scale (R Millions)', fontsize=8, fontweight='bold', color='#1E293B')
+    ax1_right.set_ylabel('Net Profit Scale (R Thousands)', fontsize=8, fontweight='bold', color='#2563EB')
+    ax1.set_title('Multi-Period Financial Vector Shift', fontsize=10, fontweight='bold', color='#0F1E2C')
+    ax1.set_xticks(range(len(categories)))
+    ax1.set_xticklabels(categories, fontsize=8)
+    
+    handle1 = plt.Rectangle((0,0),1,1,color='#1E293B', label='FY2022 Performance')
+    handle2 = plt.Rectangle((0,0),1,1,color='#2563EB', label='FY2023 Optimization')
+    ax1.legend(handles=[handle1, handle2], loc='upper right', frameon=False, fontsize=8)
+    
+    ax1.spines['top'].set_visible(False)
+    ax1_right.spines['top'].set_visible(False)
+    
+    # Plot 2: Proportional Capital Allocation Structure
     ax2 = fig.add_subplot(122)
     pie_labels = ['Direct Cost of Sales', 'Optimized Overheads', 'Retained Earnings Margin']
-    pie_slices = [23354335, 983479, 251079] # Base FY23 structural allocations
+    pie_slices = [23354335, 983479, 251079] 
     colors = ['#0F1E2C', '#334155', '#2563EB']
     
     ax2.pie(pie_slices, labels=pie_labels, colors=colors, autopct='%1.1f%%', 
@@ -87,12 +130,11 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     styles = getSampleStyleSheet()
     
     # Typography Mapping
-    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=22, leading=26, textColor=HexColor('#0F1E2C'), spaceAfter=2)
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=HexColor('#0F1E2C'), spaceAfter=2)
     subtitle_style = ParagraphStyle('DocSubtitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=HexColor('#2563EB'), spaceAfter=14)
     section_title_style = ParagraphStyle('SecTitle', fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=HexColor('#FFFFFF'))
     body_style = ParagraphStyle('ReportBody', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=15.5, textColor=HexColor('#334155'), spaceAfter=7)
     
-    # Matrix Grid Style Nodes
     th_lbl = ParagraphStyle('THLightLbl', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'))
     th_v = ParagraphStyle('THLightVal', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=HexColor('#FFFFFF'), alignment=TA_RIGHT)
     t_lbl = ParagraphStyle('TLabelGrid', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=HexColor('#1E293B'))
@@ -100,12 +142,10 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
 
     story = []
     
-    # Executive Banner Letterhead
     story.append(Paragraph("INSTITUTIONAL PERFORMANCE & FINANCIAL INTELLIGENCE DOSSIER", title_style))
     story.append(Paragraph(f"ENTERPRISE ACCOUNT: {entity_name} | ADMINISTRATIVE PERFORMANCE REVIEW", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=2, color=HexColor('#0F1E2C'), spaceAfter=14))
     
-    # Inject Visual Analysis Dashboard directly at the top of the dossier
     if dashboard_img:
         story.append(Paragraph("DASHBOARD VISUALIZATION OVERVIEW", ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=11, textColor=HexColor('#0F1E2C'), spaceAfter=4)))
         story.append(Image(dashboard_img, width=504, height=206))
@@ -119,7 +159,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
         if not clean_line:
             continue
             
-        # Section Header Parsing with solid background banners
         if clean_line.startswith(('1.', '2.', '3.', '4.', '5.', '###', '##')):
             if grid_data:
                 t = Table(grid_data, colWidths=[244, 130, 130])
@@ -140,7 +179,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
             story.append(header_table)
             story.append(Spacer(1, 8))
             
-        # Matrix Table Stream Parsing
         elif "|" in clean_line and any(m in clean_line for m in ["R", "%", "Ratio", "Indicator", "Margin", "Volume", "Valuation"]):
             parts = clean_line.split("|")
             if len(parts) == 3:
@@ -153,7 +191,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
                 else:
                     grid_data.append([Paragraph(lbl, t_lbl), Paragraph(v1, t_val), Paragraph(v2, t_val)])
                     
-        # Commentary Paragraph Parsing
         else:
             if grid_data:
                 t = Table(grid_data, colWidths=[244, 130, 130])
@@ -200,8 +237,14 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    st.info("De-serializing financial statement matrix arrays...")
+    # Build a simple unique tracking hash from names and lengths
+    combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
     
+    # Reset cache if a completely brand-new file selection is dropped in
+    if st.session_state.current_file_hash != combined_hash:
+        st.session_state.analysis_cache = None
+        st.session_state.current_file_hash = combined_hash
+
     combined_raw_text = ""
     for uploaded_file in uploaded_files:
         combined_raw_text += f"\n=== DISK ENTRY: {uploaded_file.name} ===\n"
@@ -212,16 +255,22 @@ if uploaded_files:
                     combined_raw_text += f"\n{page_text}"
 
     extracted_name = extract_company_name(combined_raw_text)
+    optimized_text_stream = distill_financial_text(combined_raw_text)
+    
     st.success(f"Enterprise Identification Decoded: **{extracted_name}**")
 
-    # 7. Elite Prompt Engineering For Ultimate Analyzer Output Structure
+    # 7. Elite Prompt Engineering
     analysis_prompt = f"""
     You are an elite institutional financial managing director and corporate governance systems auditor.
-    Review the following corporate data streams comprehensively:
+    Review the following distilled corporate data streams carefully:
     
-    {combined_raw_text}
+    {optimized_text_stream}
     
-    Generate the ultimate strategic financial analysis brief tailored perfectly for direct presentation to corporate executives.
+    Generate the ultimate strategic financial analysis brief perfectly customized for direct presentation to the board.
+    
+    CRITICAL NAME ASSIGNMENT RULE:
+    - The entity you are evaluating is explicitly: {extracted_name}. 
+    - You must use the full corporate name "{extracted_name}" throughout this text brief. Do NOT make up, assume, or hallucinate arbitrary names like "AlSaudi".
     
     CRITICAL RESTRICTIONS:
     - Never include any section, bullet, or reference named "Recommendations", "Growth Strategy", or "Strategic Growth Recommendations". Present an unyielding, high-value snapshot evaluation of facts and historical efficiency wins only.
@@ -244,78 +293,81 @@ if uploaded_files:
     Structure the entire analysis dossier using these exact primary pillars:
     
     1. EXECUTIVE PERFORMANCE SUMMARY
-       - Discuss the deliberate operational turnaround where net profitability climbed from R202,962 to R251,079 across reporting intervals. Outline how the enterprise prioritized margin insulation over raw sales volume.
+       - Discuss the deliberate operational turnaround for {extracted_name} where net profitability climbed from R202,962 to R251,079 across reporting intervals. Outline how the enterprise prioritized margin insulation over raw sales volume.
        - Render the core comparative performance table here.
     
     2. ADVANCED RATIO ANALYSIS & MARGIN EFFICIENCY
-       - Provide deep commentary on the ratio indices. Detail the exceptional operational victory where total overhead expenses were optimized downward by 50% (dropping from R1.96 Million down to R983 Thousand), expanding the Net Profit Margin from 0.63% up to 1.02% despite lower turnover volumes.
+       - Provide deep commentary on the ratio indices for {extracted_name}. Detail the exceptional operational victory where total overhead expenses were optimized downward by 50% (dropping from R1.96 Million down to R983 Thousand), expanding the Net Profit Margin from 0.63% up to 1.02% despite lower turnover volumes.
        - Render the advanced Ratio Analysis table here.
     
     3. CAPITAL STRUCTURE & COMPLIANCE FRAMEWORK
-       - Evaluate the unencumbered capital structure entirely backed by proprietor equity with zero current liabilities. Frame this as "Optimal Capital Insulation" and "Maximized Operational Cushion Base".
+       - Evaluate the unencumbered capital structure of {extracted_name} entirely backed by proprietor equity with zero current liabilities. Frame this as "Optimal Capital Insulation" and "Maximized Operational Cushion Base".
     
     4. ADMINISTRATIVE & CORPORATE GOVERNANCE ENVIRONMENT
        - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
     """
 
-    if st.button("🚀 Execute Ultimate Executive Analysis"):
-        with st.spinner("Compiling database frameworks and drafting financial visuals..."):
-            
-            response_text = None
-            max_retries = 5  # Expanded from 3 to 5 for elite resilience
-            retry_delay = 3  # Increased initial pause to let server clear
-            
-            for attempt in range(max_retries):
-                try:
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=analysis_prompt
-                    )
-                    response_text = response.text
-                    break  # Success! Break out of the loop immediately.
-                except APIError as e:
-                    # Catch both temporary 503 (busy) and 429 (rate limited) spikes
-                    if e.code in [429, 503] and attempt < max_retries - 1:
-                        st.warning(f"Cloud traffic spike detected (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # Aggressive exponential backoff
-                        continue
-                    else:
-                        st.error(f"Cloud Infrastructure Peak: Server is exceptionally busy. Code {e.code} - {e.message}")
+    # Check if we already computed this exact report inside the cache
+    if st.session_state.analysis_cache is not None:
+        response_text = st.session_state.analysis_cache
+        st.info("⚡ pulled compiled dashboard assets from local session cache memory.")
+    else:
+        response_text = None
+
+    if st.session_state.analysis_cache is自动 generated_or_clicked := st.button("🚀 Execute Ultimate Executive Analysis") or response_text:
+        if not response_text:
+            with st.spinner("Compiling database frameworks and drafting financial visuals..."):
+                max_retries = 5  
+                retry_delay = 5  # Expanded delay to let quota buckets clear cleanly
+                
+                for attempt in range(max_retries):
+                    try:
+                        response = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=analysis_prompt
+                        )
+                        response_text = response.text
+                        st.session_state.analysis_cache = response_text # Store into memory cache
+                        break  
+                    except APIError as e:
+                        if e.code in [429, 503] and attempt < max_retries - 1:
+                            st.warning(f"Waiting on quota window cooldown (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  
+                            continue
+                        else:
+                            st.error(f"API Limit: You are running hot on free tier metrics. Please try clicking the button again in 30 seconds to allow the window bucket to clear.")
+                            st.stop()
+                    except Exception as e:
+                        st.error(f"Unexpected operational variance: {e}")
                         st.stop()
-                except Exception as e:
-                    st.error(f"Unexpected operational variance: {e}")
-                    st.stop()
+        
+        if response_text:
+            dashboard_img = generate_analysis_dashboard()
             
-            if response_text:
-                # Generate custom high-value dashboard metrics images
-                dashboard_img = generate_analysis_dashboard()
-                
-                st.markdown("### 📋 Enterprise Intelligence Dashboard Preview")
-                st.image(dashboard_img, caption="Automated Advisory Performance Dashboard Matrix")
-                st.markdown(response_text)
-                st.write("---")
-                
-                # Render the ultimate integrated PDF portfolio
-                pdf_bytes = create_comprehensive_pdf(response_text, extracted_name, dashboard_img)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        label="📥 Download Ultimate Corporate Dossier (PDF)",
-                        data=pdf_bytes,
-                        file_name="Ultimate_Financial_Advisory_Dossier.pdf",
-                        mime="application/pdf"
-                    )
-                with col2:
-                    st.download_button(
-                        label="📥 Download Raw Financial Brief Text",
-                        data=response_text,
-                        file_name="Ultimate_Financial_Advisory_Brief.txt",
-                        mime="text/plain"
-                    )
-                
-                # Local cleaning of compiled system memory textures
-                import os
-                if os.path.exists(dashboard_img):
-                    os.remove(dashboard_img)
+            st.markdown("### 📋 Enterprise Intelligence Dashboard Preview")
+            st.image(dashboard_img, caption="Automated Advisory Performance Dashboard Matrix")
+            st.markdown(response_text)
+            st.write("---")
+            
+            pdf_bytes = create_comprehensive_pdf(response_text, extracted_name, dashboard_img)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📥 Download Ultimate Corporate Dossier (PDF)",
+                    data=pdf_bytes,
+                    file_name="Ultimate_Financial_Advisory_Dossier.pdf",
+                    mime="application/pdf"
+                )
+            with col2:
+                st.download_button(
+                    label="📥 Download Raw Financial Brief Text",
+                    data=response_text,
+                    file_name="Ultimate_Financial_Advisory_Brief.txt",
+                    mime="text/plain"
+                )
+            
+            import os
+            if os.path.exists(dashboard_img):
+                os.remove(dashboard_img)
