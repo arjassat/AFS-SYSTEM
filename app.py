@@ -27,7 +27,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# Initialize Session Cache Keys to save rate limit usage
+# Initialize Session Cache Keys to prevent double execution
 if "analysis_cache" not in st.session_state:
     st.session_state.analysis_cache = None
 if "current_file_hash" not in st.session_state:
@@ -59,25 +59,21 @@ def distill_financial_text(text):
         
     return "\n".join(distilled_lines)
 
-# 4. Premium Data Graphics Engine (Enhanced Readability Palette)
+# 4. Premium Data Graphics Engine (High Contrast Palette)
 def generate_analysis_dashboard():
     categories = ['Turnover\n(LHS)', 'Gross Margin\n(LHS)', 'Operating Exp\n(LHS)', 'Net Income\n(RHS)']
     
     fy2022_base = [32120820, 2168696, 1965734]
     fy2023_base = [24588893, 1234558, 983479]
-    
     fy2022_net = 202962
     fy2023_net = 251079
     
     fig = plt.figure(figsize=(11, 4.5))
     
-    # Plot 1: Dual-Axis Graph Alignment
     ax1 = fig.add_subplot(121)
     ax1_right = ax1.twinx()
-    
     width = 0.35
     
-    # Primary scale metrics
     ax1.bar(0 - width/2, fy2022_base[0]/1e6, width, color='#1E293B', label='FY2022')
     ax1.bar(0 + width/2, fy2023_base[0]/1e6, width, color='#2563EB', label='FY2023')
     
@@ -85,7 +81,6 @@ def generate_analysis_dashboard():
         ax1.bar(i - width/2, fy2022_base[i]/1e6, width, color='#1E293B')
         ax1.bar(i + width/2, fy2023_base[i]/1e6, width, color='#2563EB')
         
-    # Net Income on distinct scale to stop visualization flattening
     ax1_right.bar(3 - width/2, fy2022_net/1e3, width, color='#475569')
     ax1_right.bar(3 + width/2, fy2023_net/1e3, width, color='#3B82F6')
     
@@ -102,25 +97,16 @@ def generate_analysis_dashboard():
     ax1.spines['top'].set_visible(False)
     ax1_right.spines['top'].set_visible(False)
     
-    # Plot 2: Proportional Capital Allocation Structure (High Contrast Light Corporate Colors)
     ax2 = fig.add_subplot(122)
     pie_labels = ['Direct Cost of Sales', 'Optimized Overheads', 'Retained Earnings Margin']
     pie_slices = [23354335, 983479, 251079] 
-    
-    # Premium corporate blues with gradient separation for crisp viewing
     colors = ['#1E3A8A', '#3B82F6', '#93C5FD']
     
     wedges, texts, autotexts = ax2.pie(
-        pie_slices, 
-        labels=pie_labels, 
-        colors=colors, 
-        autopct='%1.1f%%', 
-        startangle=140, 
-        pctdistance=0.7,
-        wedgeprops={'edgecolor': 'w', 'linewidth': 1.5}
+        pie_slices, labels=pie_labels, colors=colors, autopct='%1.1f%%', 
+        startangle=140, pctdistance=0.7, wedgeprops={'edgecolor': 'w', 'linewidth': 1.5}
     )
     
-    # Force interior text white and crisp for maximum legibility against the blue slices
     for text in texts:
         text.set_color('#1E293B')
         text.set_fontsize(8.5)
@@ -141,11 +127,7 @@ def generate_analysis_dashboard():
 # 5. Full Multi-Page Enterprise Document Compiler
 def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=letter,
-        rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54
-    )
-    
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     styles = getSampleStyleSheet()
     
     title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=HexColor('#0F1E2C'), spaceAfter=2)
@@ -159,7 +141,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     t_val = ParagraphStyle('TValueGrid', fontName='Helvetica', fontSize=9, leading=12, textColor=HexColor('#0F1E2C'), alignment=TA_RIGHT)
 
     story = []
-    
     story.append(Paragraph("INSTITUTIONAL PERFORMANCE & FINANCIAL INTELLIGENCE DOSSIER", title_style))
     story.append(Paragraph(f"ENTERPRISE ACCOUNT: {entity_name} | ADMINISTRATIVE PERFORMANCE REVIEW", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=2, color=HexColor('#0F1E2C'), spaceAfter=14))
@@ -223,7 +204,6 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
                 grid_data = []
                 
             clean_line = clean_line.replace('**', '').replace('*', '').replace('___', '').replace('---', '')
-            
             para_table = Table([[Paragraph(clean_line, body_style)]], colWidths=[504])
             para_table.setStyle(TableStyle([
                 ('LINELEFT', (0,0), (0,0), 2.5, HexColor('#2563EB')),
@@ -257,6 +237,7 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
     
+    # Force state clearing if user changes the underlying files
     if st.session_state.current_file_hash != combined_hash:
         st.session_state.analysis_cache = None
         st.session_state.current_file_hash = combined_hash
@@ -323,17 +304,19 @@ if uploaded_files:
        - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
     """
 
-    if st.session_state.analysis_cache is not None:
-        response_text = st.session_state.analysis_cache
-        st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
-    else:
-        response_text = None
+    # UI Implementation: Wrap inside an airtight execution form to block rapid re-runs
+    with st.form("dossier_generation_form"):
+        st.markdown("##### 🛠️ Executive Analysis Control Console")
+        submit_button = st.form_submit_button("🚀 Execute Ultimate Executive Analysis")
 
-    if st.button("🚀 Execute Ultimate Executive Analysis") or response_text is not None:
+    # Evaluate execution conditions safely
+    if submit_button or st.session_state.analysis_cache is not None:
+        response_text = st.session_state.analysis_cache
+        
         if not response_text:
             with st.spinner("Compiling database frameworks and drafting financial visuals..."):
                 max_retries = 5  
-                retry_delay = 5  
+                retry_delay = 7  # High baseline delay to clear the 20-request threshold
                 
                 for attempt in range(max_retries):
                     try:
@@ -351,12 +334,14 @@ if uploaded_files:
                             retry_delay *= 2  
                             continue
                         else:
-                            st.error(f"API Limit: You are running hot on free tier metrics. Please try clicking the button again in 30 seconds to allow the window bucket to clear.")
+                            st.error(f"API Rate-Limit reached. Please wait 30 seconds for the free-tier quota window to clear before resubmitting.")
                             st.stop()
                     except Exception as e:
                         st.error(f"Unexpected operational variance: {e}")
                         st.stop()
-        
+        else:
+            st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
+
         if response_text:
             dashboard_img = generate_analysis_dashboard()
             
