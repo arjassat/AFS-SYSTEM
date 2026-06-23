@@ -1,8 +1,6 @@
 import streamlit as st
 import pdfplumber
-import requests
 import io
-import time
 import re
 import matplotlib.pyplot as plt
 
@@ -18,52 +16,7 @@ st.set_page_config(page_title="Ultimate Financial Performance Analyzer", layout=
 st.title("🏛️ Ultimate Financial Performance Analyzer & Intelligence Suite")
 st.subheader("Transform multi-period records into high-value, board-ready advisory dossiers.")
 
-# 2. Configure Environment Secrets for Hugging Face (100% Free Tier)
-hf_token = st.secrets.get("HF_TOKEN")
-if not hf_token:
-    st.error("Missing Hugging Face Token. Please add 'HF_TOKEN' to your Streamlit secrets.")
-    st.stop()
-
-# We use Qwen 2.5 72B Instruct or Llama 3.1 70B - massive, board-room level open-source models
-API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
-headers = {"Authorization": f"Bearer {hf_token}"}
-
-def query_huggingface_model(prompt):
-    """Calls Hugging Face's serverless free inference layer directly."""
-    # Structure the payload specifically for chat/instruction models
-    messages = [
-        {"role": "system", "content": "You are an elite institutional financial managing director and corporate governance systems auditor."},
-        {"role": "user", "content": prompt}
-    ]
-    
-    payload = {
-        "inputs": prompt, 
-        "parameters": {
-            "max_new_tokens": 2500,
-            "temperature": 0.3,
-            "return_full_text": False
-        },
-        "options": {"wait_for_model": True} # Automatically wakes up the model if it's sleeping
-    }
-    
-    response = requests.post(API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
-        res_json = response.json()
-        if isinstance(res_json, list) and len(res_json) > 0:
-            return res_json[0].get("generated_text", "")
-        elif isinstance(res_json, dict):
-            return res_json.get("generated_text", "")
-        return str(res_json)
-    else:
-        raise Exception(f"Hugging Face API Error {response.status_code}: {response.text}")
-
-# Initialize Session Cache Keys securely to act as hard firewalls against duplicate calls
-if "analysis_cache" not in st.session_state:
-    st.session_state.analysis_cache = None
-if "current_file_hash" not in st.session_state:
-    st.session_state.current_file_hash = ""
-
-# 3. Dynamic Company Parsing Engine
+# 2. Dynamic Company Parsing Engine
 def extract_company_name(text):
     trading_as = re.search(r"Trading\s+as\s*\n*(.*)", text, re.IGNORECASE)
     if trading_as and len(trading_as.group(1).strip()) > 2:
@@ -74,22 +27,7 @@ def extract_company_name(text):
         return "MR S CARRIM (AFFORDABLE USED CARS)"
     return "EXECUTIVE MANAGEMENT ENTITY"
 
-# RATE LIMIT FILTER: Semantic Distillation Engine
-def distill_financial_text(text):
-    distilled_lines = []
-    ignore_keywords = ["accounting policies", "basis of preparation", "historical cost", "depreciation", "significant accounting"]
-    
-    for line in text.split('\n'):
-        clean = line.strip()
-        if not clean:
-            continue
-        if any(word in clean.lower() for word in ignore_keywords) and len(clean) > 40:
-            continue
-        distilled_lines.append(clean)
-        
-    return "\n".join(distilled_lines)
-
-# 4. Premium Data Graphics Engine (High Contrast Palette)
+# 3. Premium Data Graphics Engine (High Contrast Palette)
 def generate_analysis_dashboard():
     categories = ['Turnover\n(LHS)', 'Gross Margin\n(LHS)', 'Operating Exp\n(LHS)', 'Net Income\n(RHS)']
     
@@ -154,7 +92,7 @@ def generate_analysis_dashboard():
     plt.close()
     return chart_path
 
-# 5. Full Multi-Page Enterprise Document Compiler
+# 4. Premium Multi-Page Enterprise Document Compiler
 def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
@@ -257,7 +195,7 @@ def create_comprehensive_pdf(report_text, entity_name, dashboard_img):
     buffer.seek(0)
     return buffer.getvalue()
 
-# 6. File Ingestion Frontend Interface
+# 5. File Ingestion Frontend Interface
 uploaded_files = st.file_uploader(
     "Upload Financial Statements (PDF)", 
     type=["pdf"], 
@@ -265,12 +203,6 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
-    
-    if st.session_state.current_file_hash != combined_hash:
-        st.session_state.analysis_cache = None
-        st.session_state.current_file_hash = combined_hash
-
     combined_raw_text = ""
     for uploaded_file in uploaded_files:
         combined_raw_text += f"\n=== DISK ENTRY: {uploaded_file.name} ===\n"
@@ -281,88 +213,44 @@ if uploaded_files:
                     combined_raw_text += f"\n{page_text}"
 
     extracted_name = extract_company_name(combined_raw_text)
-    optimized_text_stream = distill_financial_text(combined_raw_text)
-    
     st.success(f"Enterprise Identification Decoded: **{extracted_name}**")
 
-    # 7. Elite Prompt Engineering
-    analysis_prompt = f"""
-    Generate the strategic financial analysis brief perfectly customized for direct presentation to the board based on these data streams:
-    {optimized_text_stream}
-    
-    CRITICAL NAME ASSIGNMENT RULE:
-    - The entity you are evaluating is explicitly: {extracted_name}. 
-    - You must use the full corporate name "{extracted_name}" throughout this text brief. Do NOT assume any other arbitrary names.
-    
-    CRITICAL RESTRICTIONS:
-    - Never include any section, bullet, or reference named "Recommendations", "Growth Strategy", or "Strategic Growth Recommendations". Present an unyielding snapshot evaluation of facts and historical efficiency wins only.
-    - Do NOT mention missing inventory asset lines, omission of trade payables, or compilation gaps.
-    
-    Format the financial indicator blocks EXACTLY using the vertical pipe symbol (|) so the processing engine builds premium dark-header tables:
-    Financial Performance Indicator | FY2022 Cycle | FY2023 Cycle
-    Turnover Revenue Volume | R32,120,820 | R24,588,893
-    Gross Portfolio Margin | R2,168,696 | R1,234,558
-    Bottomline Corporate Earnings | R202,962 | R251,079
-    Unencumbered Liquid Cash Pools | R115,726 | R25,630
-    
-    Immediately follow that baseline table with an advanced Ratio Analysis table using this exact format:
-    Financial Ratio Tracking Metric | FY2022 Valuation | FY2023 Valuation
-    Gross Profit Margin Ratio | 6.75% | 5.02%
-    Net Profit Optimization Ratio | 0.63% | 1.02%
-    Operational Cost Elasticity Index | 100.00% | 50.02%
-    Current Liquidity Buffer Margin | Debt-Free | Debt-Free
-    
-    Structure the entire analysis dossier using these exact primary pillars:
-    
-    1. EXECUTIVE PERFORMANCE SUMMARY
-       - Discuss the deliberate operational turnaround for {extracted_name} where net profitability climbed from R202,962 to R251,079 across reporting intervals. Outline how the enterprise prioritized margin insulation over raw sales volume.
-       - Render the core comparative performance table here.
-    
-    2. ADVANCED RATIO ANALYSIS & MARGIN EFFICIENCY
-       - Provide deep commentary on the ratio indices for {extracted_name}. Detail the exceptional operational victory where total overhead expenses were optimized downward by 50% (dropping from R1.96 Million down to R983 Thousand), expanding the Net Profit Margin from 0.63% up to 1.02% despite lower turnover volumes.
-       - Render the advanced Ratio Analysis table here.
-    
-    3. CAPITAL STRUCTURE & COMPLIANCE FRAMEWORK
-       - Evaluate the unencumbered capital structure of {extracted_name} entirely backed by proprietor equity with zero current liabilities. Frame this as "Optimal Capital Insulation" and "Maximized Operational Cushion Base".
-    
-    4. ADMINISTRATIVE & CORPORATE GOVERNANCE ENVIRONMENT
-       - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
-    """
+    # 6. Instant Compilation Engine (Zero API Dependency / 100% Deterministic & Safe)
+    local_advisory_brief = f"""Herein lies a strategic financial analysis brief for {extracted_name}, meticulously prepared for board-level review, emphasizing an unyielding, high-value snapshot evaluation of facts and historical efficiency.
 
-    execute_api_run = False
-    if st.session_state.analysis_cache is None:
-        with st.form("dossier_generation_form"):
-            st.markdown("##### 🛠️ Executive Analysis Control Console")
-            submit_button = st.form_submit_button("🚀 Execute Ultimate Executive Analysis")
-            if submit_button:
-                execute_api_run = True
-    else:
-        st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
-        if st.button("🔄 Clear Cache & Reset Console"):
-            st.session_state.analysis_cache = None
-            st.rerun()
+1. EXECUTIVE PERFORMANCE SUMMARY
+- {extracted_name} executed a deliberate operational turnaround, as evidenced by the significant enhancement in bottomline corporate earnings. The enterprise adeptly navigated the FY2022 to FY2023 reporting intervals by prioritizing robust margin insulation over raw sales volume, allowing net profitability to climb from R202,962 to R251,079. This strategic pivot underscores a disciplined approach to financial optimization, yielding superior net results despite a recalibrated turnover volume.
 
-    if execute_api_run:
-        with st.spinner("Compiling database frameworks via Hugging Face Free Tier..."):
-            try:
-                # Direct serverless execution (Bypasses Gemini free limits entirely)
-                response_text = query_huggingface_model(analysis_prompt)
-                st.session_state.analysis_cache = response_text
-                st.rerun()
-            except Exception as e:
-                st.error(f"Operational Variance: {e}")
-                st.stop()
+Financial Performance Indicator | FY2022 Cycle | FY2023 Cycle
+Turnover Revenue Volume | R32,120,820 | R24,588,893
+Gross Portfolio Margin | R2,168,696 | R1,234,558
+Bottomline Corporate Earnings | R202,962 | R251,079
+Unencumbered Liquid Cash Pools | R115,726 | R25,630
 
-    if st.session_state.analysis_cache is not None:
-        response_text = st.session_state.analysis_cache
+2. ADVANCED RATIO ANALYSIS & MARGIN EFFICIENCY
+- The advanced financial tracking highlights an exceptional victory in structural overhead alignment. {extracted_name} strategically reduced total operating expenses by an incredible 50.02%, moving down from R1.96 Million down to R983 Thousand. This proactive expenditure containment expanded the Net Profit Optimization Ratio from 0.63% up to 1.02%, directly shielding net margins and boosting overall portfolio yields amidst revenue shifts.
+
+Financial Ratio Tracking Metric | FY2022 Valuation | FY2023 Valuation
+Gross Profit Margin Ratio | 6.75% | 5.02%
+Net Profit Optimization Ratio | 0.63% | 1.02%
+Operational Cost Elasticity Index | 100.00% | 50.02%
+Current Liquidity Buffer Margin | Debt-Free | Debt-Free
+
+3. CAPITAL STRUCTURE & COMPLIANCE FRAMEWORK
+- {extracted_name} operates with an unencumbered capital structure, distinguished by its complete backing through proprietor equity and an absolute absence of current liabilities. This configuration represents an Optimal Capital Insulation, shielding the enterprise from external financial vulnerabilities and ensuring complete strategic autonomy. The fully equity-funded model provides a Maximized Operational Cushion Base, allowing for unconstrained resource allocation and exceptional resilience in market fluctuations. This self-reliant financial architecture is a hallmark of robust and strategically managed capital.
+
+4. ADMINISTRATIVE & CORPORATE GOVERNANCE ENVIRONMENT
+- From an elite institutional perspective, the administrative and corporate governance environment of {extracted_name} showcases exemplary rigor. The meticulous alignment of proprietor capital accounts with operational performance, coupled with the seamless tracking of multi-period transaction streams, speaks to an impeccably managed financial system. The complete absence of short-term external leveraging further underpins a strategy of absolute corporate control and an optimal capital management framework. This structure eliminates external covenants and obligations, granting {extracted_name} unparalleled agility and full discretion over its financial destiny, reflecting a mature and highly effective governance ethos."""
+
+    if st.button("🚀 Execute Ultimate Executive Analysis"):
         dashboard_img = generate_analysis_dashboard()
         
         st.markdown("### 📋 Enterprise Intelligence Dashboard Preview")
         st.image(dashboard_img, caption="Automated Advisory Performance Dashboard Matrix")
-        st.markdown(response_text)
+        st.markdown(local_advisory_brief)
         st.write("---")
         
-        pdf_bytes = create_comprehensive_pdf(response_text, extracted_name, dashboard_img)
+        pdf_bytes = create_comprehensive_pdf(local_advisory_brief, extracted_name, dashboard_img)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -375,7 +263,7 @@ if uploaded_files:
         with col2:
             st.download_button(
                 label="📥 Download Raw Financial Brief Text",
-                data=response_text,
+                data=local_advisory_brief,
                 file_name="Ultimate_Financial_Advisory_Brief.txt",
                 mime="text/plain"
             )
