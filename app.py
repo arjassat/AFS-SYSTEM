@@ -27,7 +27,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# Initialize Session Cache Keys to prevent double execution
+# Initialize Session Cache Keys securely to act as hard firewalls against duplicate calls
 if "analysis_cache" not in st.session_state:
     st.session_state.analysis_cache = None
 if "current_file_hash" not in st.session_state:
@@ -237,7 +237,7 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
     
-    # Force state clearing if user changes the underlying files
+    # Auto-reset if user removes or drops in a fresh document choice
     if st.session_state.current_file_hash != combined_hash:
         st.session_state.analysis_cache = None
         st.session_state.current_file_hash = combined_hash
@@ -304,70 +304,79 @@ if uploaded_files:
        - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
     """
 
-    # UI Implementation: Wrap inside an airtight execution form to block rapid re-runs
-    with st.form("dossier_generation_form"):
-        st.markdown("##### 🛠️ Executive Analysis Control Console")
-        submit_button = st.form_submit_button("🚀 Execute Ultimate Executive Analysis")
+    # WORKAROUND ENGINE: Use state checks to structurally bypass duplicate code invocation
+    execute_api_run = False
+    
+    if st.session_state.analysis_cache is None:
+        # Step A: Render generation console ONLY if no result currently sits in active state
+        with st.form("dossier_generation_form"):
+            st.markdown("##### 🛠️ Executive Analysis Control Console")
+            submit_button = st.form_submit_button("🚀 Execute Ultimate Executive Analysis")
+            if submit_button:
+                execute_api_run = True
+    else:
+        # Step B: If analysis exists, lock out the button entirely and provide a clean reset alternative
+        st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
+        if st.button("🔄 Clear Cache & Reset Console"):
+            st.session_state.analysis_cache = None
+            st.rerun()
 
-    # Evaluate execution conditions safely
-    if submit_button or st.session_state.analysis_cache is not None:
-        response_text = st.session_state.analysis_cache
-        
-        if not response_text:
-            with st.spinner("Compiling database frameworks and drafting financial visuals..."):
-                max_retries = 5  
-                retry_delay = 7  # High baseline delay to clear the 20-request threshold
-                
-                for attempt in range(max_retries):
-                    try:
-                        response = client.models.generate_content(
-                            model='gemini-2.5-flash',
-                            contents=analysis_prompt
-                        )
-                        response_text = response.text
-                        st.session_state.analysis_cache = response_text 
-                        break  
-                    except APIError as e:
-                        if e.code in [429, 503] and attempt < max_retries - 1:
-                            st.warning(f"Waiting on quota window cooldown (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
-                            time.sleep(retry_delay)
-                            retry_delay *= 2  
-                            continue
-                        else:
-                            st.error(f"API Rate-Limit reached. Please wait 30 seconds for the free-tier quota window to clear before resubmitting.")
-                            st.stop()
-                    except Exception as e:
-                        st.error(f"Unexpected operational variance: {e}")
+    # Step C: Execute API requests strictly when explicitly triggered
+    if execute_api_run:
+        with st.spinner("Compiling database frameworks and drafting financial visuals..."):
+            max_retries = 5  
+            retry_delay = 10  # Generous padding to clear free tier limitations
+            
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=analysis_prompt
+                    )
+                    st.session_state.analysis_cache = response.text
+                    st.rerun()  # Force instant state commit to prevent code fall-through leaks
+                    break  
+                except APIError as e:
+                    if e.code in [429, 503] and attempt < max_retries - 1:
+                        st.warning(f"Waiting on quota window cooldown (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  
+                        continue
+                    else:
+                        st.error(f"API Rate-Limit reached. Please wait 30 seconds for the free-tier quota window to clear before resubmitting.")
                         st.stop()
-        else:
-            st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
+                except Exception as e:
+                    st.error(f"Unexpected operational variance: {e}")
+                    st.stop()
 
-        if response_text:
-            dashboard_img = generate_analysis_dashboard()
-            
-            st.markdown("### 📋 Enterprise Intelligence Dashboard Preview")
-            st.image(dashboard_img, caption="Automated Advisory Performance Dashboard Matrix")
-            st.markdown(response_text)
-            st.write("---")
-            
-            pdf_bytes = create_comprehensive_pdf(response_text, extracted_name, dashboard_img)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="📥 Download Ultimate Corporate Dossier (PDF)",
-                    data=pdf_bytes,
-                    file_name="Ultimate_Financial_Advisory_Dossier.pdf",
-                    mime="application/pdf"
-                )
-            with col2:
-                st.download_button(
-                    label="📥 Download Raw Financial Brief Text",
-                    data=response_text,
-                    file_name="Ultimate_Financial_Advisory_Brief.txt",
-                    mime="text/plain"
-                )
-            
-            import os
-            if os.path.exists(dashboard_img):
-                os.remove(dashboard_img)
+    # Step D: Safe, isolated text and image rendering from local cache
+    if st.session_state.analysis_cache is not None:
+        response_text = st.session_state.analysis_cache
+        dashboard_img = generate_analysis_dashboard()
+        
+        st.markdown("### 📋 Enterprise Intelligence Dashboard Preview")
+        st.image(dashboard_img, caption="Automated Advisory Performance Dashboard Matrix")
+        st.markdown(response_text)
+        st.write("---")
+        
+        pdf_bytes = create_comprehensive_pdf(response_text, extracted_name, dashboard_img)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="📥 Download Ultimate Corporate Dossier (PDF)",
+                data=pdf_bytes,
+                file_name="Ultimate_Financial_Advisory_Dossier.pdf",
+                mime="application/pdf"
+            )
+        with col2:
+            st.download_button(
+                label="📥 Download Raw Financial Brief Text",
+                data=response_text,
+                file_name="Ultimate_Financial_Advisory_Brief.txt",
+                mime="text/plain"
+            )
+        
+        import os
+        if os.path.exists(dashboard_img):
+            os.remove(dashboard_img)
