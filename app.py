@@ -1,7 +1,6 @@
 import streamlit as st
 import pdfplumber
-from google import genai
-from google.genai.errors import APIError
+import requests
 import io
 import time
 import re
@@ -19,13 +18,44 @@ st.set_page_config(page_title="Ultimate Financial Performance Analyzer", layout=
 st.title("🏛️ Ultimate Financial Performance Analyzer & Intelligence Suite")
 st.subheader("Transform multi-period records into high-value, board-ready advisory dossiers.")
 
-# 2. Configure Environment Secrets
-api_key = st.secrets.get("GEMINI_API_KEY")
-if not api_key:
-    st.error("Missing Gemini API Key. Please add it to your Streamlit secrets.")
+# 2. Configure Environment Secrets for Hugging Face (100% Free Tier)
+hf_token = st.secrets.get("HF_TOKEN")
+if not hf_token:
+    st.error("Missing Hugging Face Token. Please add 'HF_TOKEN' to your Streamlit secrets.")
     st.stop()
 
-client = genai.Client(api_key=api_key)
+# We use Qwen 2.5 72B Instruct or Llama 3.1 70B - massive, board-room level open-source models
+API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
+headers = {"Authorization": f"Bearer {hf_token}"}
+
+def query_huggingface_model(prompt):
+    """Calls Hugging Face's serverless free inference layer directly."""
+    # Structure the payload specifically for chat/instruction models
+    messages = [
+        {"role": "system", "content": "You are an elite institutional financial managing director and corporate governance systems auditor."},
+        {"role": "user", "content": prompt}
+    ]
+    
+    payload = {
+        "inputs": prompt, 
+        "parameters": {
+            "max_new_tokens": 2500,
+            "temperature": 0.3,
+            "return_full_text": False
+        },
+        "options": {"wait_for_model": True} # Automatically wakes up the model if it's sleeping
+    }
+    
+    response = requests.post(API_URL, headers=headers, json=payload)
+    if response.status_code == 200:
+        res_json = response.json()
+        if isinstance(res_json, list) and len(res_json) > 0:
+            return res_json[0].get("generated_text", "")
+        elif isinstance(res_json, dict):
+            return res_json.get("generated_text", "")
+        return str(res_json)
+    else:
+        raise Exception(f"Hugging Face API Error {response.status_code}: {response.text}")
 
 # Initialize Session Cache Keys securely to act as hard firewalls against duplicate calls
 if "analysis_cache" not in st.session_state:
@@ -237,7 +267,6 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     combined_hash = "-".join([f"{f.name}_{f.size}" for f in uploaded_files])
     
-    # Auto-reset if user removes or drops in a fresh document choice
     if st.session_state.current_file_hash != combined_hash:
         st.session_state.analysis_cache = None
         st.session_state.current_file_hash = combined_hash
@@ -258,20 +287,16 @@ if uploaded_files:
 
     # 7. Elite Prompt Engineering
     analysis_prompt = f"""
-    You are an elite institutional financial managing director and corporate governance systems auditor.
-    Review the following distilled corporate data streams carefully:
-    
+    Generate the strategic financial analysis brief perfectly customized for direct presentation to the board based on these data streams:
     {optimized_text_stream}
-    
-    Generate the ultimate strategic financial analysis brief perfectly customized for direct presentation to the board.
     
     CRITICAL NAME ASSIGNMENT RULE:
     - The entity you are evaluating is explicitly: {extracted_name}. 
-    - You must use the full corporate name "{extracted_name}" throughout this text brief. Do NOT make up, assume, or hallucinate arbitrary names like "AlSaudi".
+    - You must use the full corporate name "{extracted_name}" throughout this text brief. Do NOT assume any other arbitrary names.
     
     CRITICAL RESTRICTIONS:
-    - Never include any section, bullet, or reference named "Recommendations", "Growth Strategy", or "Strategic Growth Recommendations". Present an unyielding, high-value snapshot evaluation of facts and historical efficiency wins only.
-    - Do NOT mention missing inventory asset lines, omission of trade payables, or compilation gaps. Treat the financial ecosystem as completely intentional, airtight, and robustly structured.
+    - Never include any section, bullet, or reference named "Recommendations", "Growth Strategy", or "Strategic Growth Recommendations". Present an unyielding snapshot evaluation of facts and historical efficiency wins only.
+    - Do NOT mention missing inventory asset lines, omission of trade payables, or compilation gaps.
     
     Format the financial indicator blocks EXACTLY using the vertical pipe symbol (|) so the processing engine builds premium dark-header tables:
     Financial Performance Indicator | FY2022 Cycle | FY2023 Cycle
@@ -304,52 +329,30 @@ if uploaded_files:
        - Discuss the business through an elite institutional lens: highlight the meticulous alignment of proprietor capital accounts, the seamless tracking of multi-period transaction streams, and the complete absence of short-term external leveraging. Detail how this demonstrates absolute corporate control and an optimal capital management framework.
     """
 
-    # WORKAROUND ENGINE: Use state checks to structurally bypass duplicate code invocation
     execute_api_run = False
-    
     if st.session_state.analysis_cache is None:
-        # Step A: Render generation console ONLY if no result currently sits in active state
         with st.form("dossier_generation_form"):
             st.markdown("##### 🛠️ Executive Analysis Control Console")
             submit_button = st.form_submit_button("🚀 Execute Ultimate Executive Analysis")
             if submit_button:
                 execute_api_run = True
     else:
-        # Step B: If analysis exists, lock out the button entirely and provide a clean reset alternative
         st.info("⚡ Pulled compiled dashboard assets from local session cache memory.")
         if st.button("🔄 Clear Cache & Reset Console"):
             st.session_state.analysis_cache = None
             st.rerun()
 
-    # Step C: Execute API requests strictly when explicitly triggered
     if execute_api_run:
-        with st.spinner("Compiling database frameworks and drafting financial visuals..."):
-            max_retries = 5  
-            retry_delay = 10  # Generous padding to clear free tier limitations
-            
-            for attempt in range(max_retries):
-                try:
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=analysis_prompt
-                    )
-                    st.session_state.analysis_cache = response.text
-                    st.rerun()  # Force instant state commit to prevent code fall-through leaks
-                    break  
-                except APIError as e:
-                    if e.code in [429, 503] and attempt < max_retries - 1:
-                        st.warning(f"Waiting on quota window cooldown (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  
-                        continue
-                    else:
-                        st.error(f"API Rate-Limit reached. Please wait 30 seconds for the free-tier quota window to clear before resubmitting.")
-                        st.stop()
-                except Exception as e:
-                    st.error(f"Unexpected operational variance: {e}")
-                    st.stop()
+        with st.spinner("Compiling database frameworks via Hugging Face Free Tier..."):
+            try:
+                # Direct serverless execution (Bypasses Gemini free limits entirely)
+                response_text = query_huggingface_model(analysis_prompt)
+                st.session_state.analysis_cache = response_text
+                st.rerun()
+            except Exception as e:
+                st.error(f"Operational Variance: {e}")
+                st.stop()
 
-    # Step D: Safe, isolated text and image rendering from local cache
     if st.session_state.analysis_cache is not None:
         response_text = st.session_state.analysis_cache
         dashboard_img = generate_analysis_dashboard()
